@@ -25,7 +25,7 @@ app.set("trust proxy", 1);
    CORS CONFIG (PRODUCTION SAFE)
 ========================================================= */
 const corsOptions = {
-  origin: "https://vitalimes.com", // ONLY frontend
+  origin: ["https://vitalimes.com", "https://www.appconnect.cloud"],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
@@ -39,7 +39,11 @@ app.use(cors(corsOptions));
 ========================================================= */
 app.use((req, res, next) => {
   if (req.method === "OPTIONS") {
-    res.header("Access-Control-Allow-Origin", "https://vitalimes.com");
+    const allowedOrigins = ["https://vitalimes.com", "https://www.appconnect.cloud"];
+    const origin = req.headers.origin;
+    if (allowedOrigins.includes(origin)) {
+      res.header("Access-Control-Allow-Origin", origin);
+    }
     res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
     res.header("Access-Control-Allow-Credentials", "true");
@@ -47,6 +51,7 @@ app.use((req, res, next) => {
   }
   next();
 });
+
 
 /* =========================================================
    BODY PARSERS
