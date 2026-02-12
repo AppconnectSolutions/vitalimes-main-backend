@@ -25,7 +25,7 @@ app.set("trust proxy", 1);
    CORS CONFIG (PRODUCTION SAFE)
 ========================================================= */
 const corsOptions = {
-  origin: ["https://vitalimes.com", "https://www.appconnect.cloud"],
+  origin: ["https://vitalimes.com", "https://www.appconnect.cloud","https://vitalimes-frontend-sbwube-8e05f5-72-61-237-203.traefik.me"],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
@@ -39,7 +39,7 @@ app.use(cors(corsOptions));
 ========================================================= */
 app.use((req, res, next) => {
   if (req.method === "OPTIONS") {
-    const allowedOrigins = ["https://vitalimes.com", "https://www.appconnect.cloud"];
+    const allowedOrigins = ["https://vitalimes.com", "https://www.appconnect.cloud","https://vitalimes-frontend-sbwube-8e05f5-72-61-237-203.traefik.me"];
     const origin = req.headers.origin;
     if (allowedOrigins.includes(origin)) {
       res.header("Access-Control-Allow-Origin", origin);
