@@ -1,9 +1,9 @@
+
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import multer from "multer";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-
 import productRoutes from "./routes/products.js";
 import categoryRoutes from "./routes/categories.js";
 import orderRoutes from "./routes/orders.js";
@@ -11,7 +11,6 @@ import paymentRoutes from "./routes/payment.js";
 import shipmentRoutes from "./routes/shipment.js";
 import authRoutes from "./routes/auth.js";
 import dashboardRoutes from "./routes/dashboard.js";
-
 import axios from "axios";
 
 dotenv.config();
@@ -24,39 +23,42 @@ const app = express();
 app.set("trust proxy", 1);
 
 /* =========================================================
+   CORS CONFIG (PRODUCTION SAFE)
+========================================================= */
+const corsOptions = {
+  origin: ["https://vitalimes.com", "https://appconnect.cloud","https://vitalimes-frontend-sbwube-c11f73-72-61-237-203.traefik.me"],
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  exposedHeaders: ["Authorization"]
+};
+
+app.use(cors(corsOptions));
+
+/* =========================================================
+   HANDLE PREFLIGHT REQUESTS (CRITICAL FIX)
+========================================================= */
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    const allowedOrigins = ["https://vitalimes.com", "https://appconnect.cloud","https://vitalimes-frontend-sbwube-c11f73-72-61-237-203.traefik.me"];
+    const origin = req.headers.origin;
+    if (allowedOrigins.includes(origin)) {
+      res.header("Access-Control-Allow-Origin", origin);
+    }
+    res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.header("Access-Control-Allow-Credentials", "true");
+    return res.sendStatus(204);
+  }
+  next();
+});
+
+
+/* =========================================================
    BODY PARSERS
 ========================================================= */
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
-
-/* =========================================================
-   CORS CONFIG (PRODUCTION SAFE)
-   - Remove any custom OPTIONS middleware. This handles it.
-========================================================= */
-const allowedOrigins = new Set([
-  "https://vitalimes.com",
-  "https://appconnect.cloud",
-  "https://vitalimes-frontend-sbwube-c11f73-72-61-237-203.traefik.me",
-]);
-
-const corsOptions = {
-  origin: (origin, cb) => {
-    // allow server-to-server, curl, postman (no Origin header)
-    if (!origin) return cb(null, true);
-
-    if (allowedOrigins.has(origin)) return cb(null, true);
-
-    return cb(new Error(`CORS blocked for origin: ${origin}`));
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  exposedHeaders: ["Authorization"],
-  optionsSuccessStatus: 204,
-};
-
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // ✅ preflight support
 
 /* =========================================================
    MULTER (MEMORY STORAGE)
@@ -67,7 +69,7 @@ const upload = multer({ storage: multer.memoryStorage() });
    MINIO / S3 CLIENT
 ========================================================= */
 const s3 = new S3Client({
-  endpoint: process.env.MINIO_ENDPOINT, // e.g. http://vitalimes-minio-tluja8:9000
+  endpoint: process.env.MINIO_ENDPOINT,
   region: "us-east-1",
   credentials: {
     accessKeyId: process.env.MINIO_ACCESS_KEY,
@@ -81,7 +83,9 @@ const s3 = new S3Client({
 ========================================================= */
 app.post("/api/uploads", upload.single("file"), async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
 
     const safeName = req.file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, "_");
     const fileName = `uploads/product-${Date.now()}-${safeName}`;
@@ -95,35 +99,28 @@ app.post("/api/uploads", upload.single("file"), async (req, res) => {
       })
     );
 
-    // Public URL
-    // Example: https://minio.vitalimes.com/vitalimes-images/uploads/xxx.png
     const fileUrl = `${process.env.MINIO_PUBLIC_URL}/${process.env.MINIO_BUCKET}/${fileName}`;
 
-    return res.json({ message: "Upload successful", url: fileUrl });
+    res.json({
+      message: "Upload successful",
+      url: fileUrl,
+    });
   } catch (err) {
     console.error("Upload error:", err);
-    return res.status(500).json({ error: "Upload failed" });
+    res.status(500).json({ error: "Upload failed" });
   }
 });
 
 /* =========================================================
    IMAGE PROXY (MINIO → EXPRESS)
-   ✅ FIXED: supports /images/uploads/about_banner.png (paths with /)
 ========================================================= */
-app.get("/images/*", async (req, res) => {
+app.get("/images/:filename", async (req, res) => {
   try {
-    const key = decodeURIComponent(req.params[0]); // keeps "uploads/xxx.png"
-    const minioUrl = `${process.env.MINIO_PUBLIC_URL}/${process.env.MINIO_BUCKET}/${key}`;
+    const filename = decodeURIComponent(req.params.filename);
+    const minioUrl = `${process.env.MINIO_PUBLIC_URL}/${process.env.MINIO_BUCKET}/${filename}`;
 
     const response = await axios.get(minioUrl, { responseType: "stream" });
-
-    res.setHeader(
-      "Content-Type",
-      response.headers["content-type"] || "application/octet-stream"
-    );
-    // Optional caching (safe for public images)
-    res.setHeader("Cache-Control", "public, max-age=86400");
-
+    res.setHeader("Content-Type", response.headers["content-type"]);
     response.data.pipe(res);
   } catch (error) {
     console.error("Image fetch error:", error.message);
