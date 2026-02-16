@@ -22,10 +22,17 @@ router.post("/create-payment", async (req, res) => {
   try {
     const { amount } = req.body;
 
+    const rupees = Number(amount);
+    if (!Number.isFinite(rupees) || rupees <= 0) {
+      return res.status(400).json({ success: false, error: "Invalid amount" });
+    }
+
+    const paise = Math.round(rupees * 100);
+
     const order = await razorpay.orders.create({
-      amount: amount * 100,
+      amount: paise,
       currency: "INR",
-      receipt: "VTL-" + Date.now(),
+      receipt: `VTL-${Date.now()}`,
     });
 
     return res.json({
@@ -34,9 +41,13 @@ router.post("/create-payment", async (req, res) => {
       key: process.env.RAZORPAY_KEY_ID,
     });
   } catch (err) {
-    console.error("Razorpay Error:", err);
-    return res.status(500).json({ success: false, error: err.message });
+    console.error("Razorpay Error full:", err?.statusCode, err?.error || err);
+    return res.status(500).json({
+      success: false,
+      error: err?.error?.description || err.message || "Razorpay error",
+    });
   }
 });
+
 
 export default router;
