@@ -39,19 +39,23 @@ const allowedOrigins = new Set([
 
 const corsOptions = {
   origin: (origin, cb) => {
-    // allow curl/postman/server-to-server (no Origin header)
     if (!origin) return cb(null, true);
-
     if (allowedOrigins.has(origin)) return cb(null, true);
-
     return cb(new Error(`CORS blocked for origin: ${origin}`));
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  exposedHeaders: ["Authorization"],
+  allowedHeaders: [
+    "content-type",
+    "authorization",
+    "cache-control",
+    "pragma",
+    "x-requested-with",
+  ],
+  exposedHeaders: ["authorization"],
   optionsSuccessStatus: 204,
 };
+
 
 app.use(cors(corsOptions));
 
